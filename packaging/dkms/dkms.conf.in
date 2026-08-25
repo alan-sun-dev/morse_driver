@@ -27,8 +27,20 @@ BUILT_MODULE_NAME[1]="dot11ah"
 BUILT_MODULE_LOCATION[1]="dot11ah"
 DEST_MODULE_LOCATION[1]="/updates"
 
-# Deliberately "no". ccflags-y carries -Werror, so a warning introduced by a
-# newer kernel's headers becomes a build failure during an unattended kernel
-# upgrade and the driver is simply absent at the next boot. Rebuild explicitly:
-#     sudo dkms install morse/@VERSION@ -k $(uname -r)
-AUTOINSTALL="no"
+# Intended, and validated on hardware: on 2026-08-25 a kernel upgrade from
+# 6.6.51 to 6.12.96 rebuilt and installed this module unattended, for both the
+# -v8 and -2712 flavours, and the radio associated on the first attempt after
+# the reboot.
+#
+# Note for anyone editing this: with dkms 3.0.10 the OFF value is not "no".
+# dkms tests `[[ ! $AUTOINSTALL ]]`, which is a test for empty, so every
+# non-empty string -- "no" included -- enables autoinstall. To disable it the
+# variable must be absent or empty, and then every kernel change needs
+#     sudo dkms install morse/@VERSION@ -k <kernelrelease>
+#
+# The residual risk is a build that fails on a future kernel: ccflags-y carries
+# -Werror (unchanged from upstream, deliberately), so a new warning becomes a
+# build failure and autoinstall then leaves the system with no driver at the
+# next boot. Verify a kernel upgrade before rebooting into it -- the checklist
+# is in the lifecycle protocol linked from README.md.
+AUTOINSTALL="yes"

@@ -22,7 +22,7 @@ sudo dkms install morse/<version>      # see "install" below before running this
 `dkms` lives in `/usr/sbin`, which is not on a non-root `PATH` on Debian — call
 it through `sudo`, or `command not found` will look like a missing package.
 
-## Status: build-tested, not install-tested
+## Status: full lifecycle validated on hardware
 
 Run on the MM6108A2 board, kernel `6.12.96+rpt-rpi-v8`, 2026-08-25:
 
@@ -32,12 +32,13 @@ Run on the MM6108A2 board, kernel `6.12.96+rpt-rpi-v8`, 2026-08-25:
 | `dkms build` | ok — `morse/mm8108-2.0.0+rpi-portability, 6.12.96+rpt-rpi-v8, aarch64: built` |
 | artefacts | `morse.ko.xz`, `dot11ah.ko.xz` under `.../aarch64/module/` |
 | same code as a manual build? | yes — `srcversion 89A7C1DAC9B51F941EFC8F2`, identical |
-| `dkms install` | **deliberately not run** |
+| `dkms install` | not run in that first pass — both boards were mid-soak |
 
-`dkms install` was skipped because both test boards are mid-soak on modules
-placed in `updates/` by hand, and installing would replace them. Nothing in this
-run touched `/lib/modules`; that was checked afterwards, along with the link
-still being up and SPI `errors 0`.
+**Superseded on 2026-08-25:** a full lifecycle — add, build, install, cold boot,
+HaLow, kernel upgrade, automatic rebuild, cold boot, HaLow again, uninstall,
+rollback — then ran end to end on a dedicated card in the A2 board. All ten legs
+passed. Details and the two findings that came out of it are in
+[the protocol](https://github.com/alan-sun-dev/halow-wm6108-rpi4/tree/main/tools/dkms-lifecycle).
 
 **Two differences from a manual build, both worth knowing before trusting the
 package:**
@@ -142,30 +143,41 @@ generally. The 2024-11-19 Raspberry Pi OS image already ships matching headers f
 both `6.6.51+rpt-rpi-v8` and, after an upgrade, `6.12.96+rpt-rpi-v8`; nothing had
 to be transplanted for either build.
 
-## The `-Werror` problem
+## Autoinstall, `-Werror`, and one dkms surprise
 
-`ccflags-y += $(DEBFLAGS) -Wall -Werror`.
+`ccflags-y += $(DEBFLAGS) -Wall -Werror` — **unchanged from upstream, on
+purpose.** It is the reason the first change in this fork exists at all: a
+`#warning` that `-Werror` turns into a fatal error on a stock kernel.
 
-Under DKMS with `AUTOINSTALL="yes"`, the driver is rebuilt automatically whenever
-a new kernel is installed. With `-Werror`, any new warning introduced by a newer
-kernel's headers is a build failure, and it happens during an unattended
-`apt upgrade` — the module silently stops being available at the next boot. This
-is not hypothetical for this driver: the whole reason the first change in this
-fork exists is a `#warning` that `-Werror` turned into a fatal error on a stock
-kernel.
+`AUTOINSTALL="yes"`, and that is now the validated behaviour rather than a
+default nobody tested. On 2026-08-25 a kernel upgrade from `6.6.51` to `6.12.96`
+rebuilt and installed this module unattended from the kernel postinst, for both
+the `-v8` and `-2712` flavours, and the radio associated on the first attempt
+after the reboot.
 
-Options, none of them free:
+**The surprise worth knowing before you edit that line:** with dkms 3.0.10 the
+off value is not `"no"`. From `/usr/sbin/dkms`:
 
-1. Keep `-Werror` and set `AUTOINSTALL="no"`, so a kernel upgrade leaves the old
-   module and a human decides when to rebuild. Safest, least convenient.
-2. Keep `-Werror` and `AUTOINSTALL="yes"`, and accept that a kernel upgrade can
-   remove the driver.
-3. Drop `-Werror` in the DKMS build only. This diverges from how the driver is
-   built everywhere else, including how it was validated, so warnings would go
-   unnoticed in exactly the builds nobody watches.
+```sh
+# if the module does not want to be autoinstalled, skip it.
+if [[ ! $AUTOINSTALL ]]; then
+    continue
+fi
+```
 
-The `dkms.conf.in` here takes option 1 and says so in a comment. This should be an
-explicit decision, not a default.
+That is a test for **empty**. Every non-empty string is truthy, so `"no"` enables
+autoinstall exactly as `"yes"` does. To genuinely disable it the variable must be
+absent or empty, and then every kernel change needs an explicit
+`dkms install -k <kernelrelease>`.
+
+**The residual risk is unchanged and is real:** a build that fails on some future
+kernel leaves the machine with no driver at the next boot, silently, during an
+unattended upgrade. The answer is not to disable autoinstall — it is to verify
+the upgrade before rebooting into it. The gate is in
+[the lifecycle protocol](https://github.com/alan-sun-dev/halow-wm6108-rpi4/tree/main/tools/dkms-lifecycle):
+dpkg clean, `modules.dep` and headers present for the new kernel, DKMS reporting
+both modules installed for it, and `modinfo -k` confirming filename, srcversion
+and vermagic — all before the reboot, not after.
 
 ## What DKMS does not cover
 
@@ -182,13 +194,8 @@ That is the natural next packaging step and is deliberately not started here.
 
 ## Still to do
 
-A full lifecycle validation — add, build, install, cold boot, functional HaLow,
-kernel upgrade, cross-kernel rebuild, boot, HaLow again, uninstall, rollback —
-is written up as a protocol with its harness in the research repository, at
-[`tools/dkms-lifecycle/`](https://github.com/alan-sun-dev/halow-wm6108-rpi4/tree/main/tools/dkms-lifecycle).
-It is prepared and not yet run; it needs a board that is not in use.
-
-Also outstanding: an `install`-tested run on a board that is not mid-soak, a decision on the
-`-Werror`/`AUTOINSTALL` trade-off above, and optionally a `debian/` layer so the
-whole thing ships as one package alongside the overlay, BCF and modprobe
-options.
+The MM6108**A1** hardware: the lifecycle ran on the A2 HAT only. A `debian/`
+layer, so the package ships alongside the overlay, BCF and modprobe options —
+none of which DKMS covers. And a deliberate test of the failure case that
+`AUTOINSTALL="yes"` exposes: make a build fail on purpose for a new kernel and
+confirm the gate in the protocol catches it before the reboot.
