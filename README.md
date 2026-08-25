@@ -114,37 +114,52 @@ the same pass, in `/usr/src/linux-headers-<version>+rpt-common-rpi/include/linux
 
 ### This branch on hardware
 
-Loaded once, 2026-08-25, on the **MM6108A2 / Heltec HT-HC01P** running
-`6.12.96+rpt-rpi-v8`: both modules installed to `updates/`, `depmod`, and a cold
-reboot, so the autoload path was exercised rather than `insmod`.
+Loaded on **both** boards, 2026-08-25. In each case the modules were installed to
+`updates/` and the machine **cold rebooted**, so what was tested is the unattended
+autoload path rather than an `insmod`.
 
-| | |
-|---|---|
-| module autoloaded | t = 4.96 s, reporting `0-rel_mm8108_2_0_0_2026_Apr_21` |
-| firmware | `mm6108.bin`, crc32 `0xbe7b5c8f` |
-| BCF | the board's own file, crc32 `0x389a48c4`, t = 5.12 s |
-| authenticated / associated | t = 7.35 s / 7.41 s, **first attempt** (`try 1/3`) |
-| security | AP logged `auth_alg=sae`; AP reports `MFP: yes` for this station |
-| address | DHCP, the same lease as before the swap |
-| link | MCS7 at 4 MHz, `tx failed 0`, 41 tx retries over the whole session |
-| ICMP | 60/60, 0% loss, avg 5.7 ms |
-| data | 4 MiB each way, SHA-256 matching and full size both directions |
-| SPI | `errors 0`, `timedout 0` across 63,526 messages / 30.6 MB |
-| driver log | zero CMD63, `-EPROTO`, CRC, read/write or probe failure lines |
+| | MM6108**A2** — HT-HC01P, `6.12.96` | MM6108**A1** — Wio-WM6108, `6.6.51` |
+|---|---|---|
+| module autoloaded | t = 4.96 s | t = 9.96 s |
+| firmware / BCF loaded | crc32 `0xbe7b5c8f` / `0x389a48c4` | crc32 `0xbe7b5c8f` / `0x941b2a82` |
+| authenticated → associated | 7.35 s → 7.41 s, **try 1/3** | 12.08 s → 12.10 s, **try 1/3** |
+| security, from the AP | `auth_alg=sae`, `MFP: yes` | `auth_alg=sae`, `MFP: yes` |
+| address | DHCP, same lease as before the swap | DHCP, same lease as before the swap |
+| link | MCS7 / 4 MHz, `tx failed 0`, 41 retries | MCS7 / 4 MHz, `tx failed 0`, 34 retries |
+| ICMP | 60/60, 0% loss, avg 5.7 ms | 60/60, 0% loss, avg 4.6 ms |
+| data | 4 MiB each way, SHA-256 matching, full size | 4 MiB each way, SHA-256 matching, full size |
+| SPI | `errors 0`, `timedout 0`, 63,526 msgs / 30.6 MB | `errors 0`, `timedout 0`, 56,526 msgs / 28.6 MB |
+| driver log | 0 CMD63 / `-EPROTO` / CRC / read / write / probe failures | same, 0 |
 
-The AP's own byte counters for this station went from 2,773 rx / 1,520 tx to
-4,616,407 / 4,539,146 across the transfer, which is what establishes that the
-traffic crossed the radio rather than some other path.
+So this branch's coverage is:
 
-That the module actually changed was checked rather than assumed: `srcversion`
-went from `87374779AA811C291578351` to `89A7C1DAC9B51F941EFC8F2` and the version
-string from `mm6108_2_0_1` to `mm8108_2_0_0`. The reboot was confirmed by
-`/proc/sys/kernel/random/boot_id` changing, not by reading uptime.
+| Kernel | MM6108A1 / Wio-WM6108 | MM6108A2 / HT-HC01P |
+|---|---|---|
+| `6.6.51+rpt-rpi-v8` | **on hardware** | builds; hardware only on `portability-mm6108-2.0.1` |
+| `6.12.96+rpt-rpi-v8` | not tested — that board is deliberately kept on 6.6.51 | **on hardware** |
 
-**Still untested on this branch:** the MM6108A1 / Wio-WM6108, and kernel 6.6.51.
-Both are covered for `portability-mm6108-2.0.1` and neither has been re-run on
-this base. Sustained throughput was not benchmarked here either — the transfers
-above were correctness checks, not measurements.
+**What this establishes beyond the fixes themselves:** `mm8108-2.0.0` changed
+twelve other files relative to `mm6108-2.0.1` (`mac.c`, `wiphy.c`, `skbq.c`,
+`pageset.c`, `yaps.c` and others). None of them breaks MM6108 on either silicon
+revision or either kernel. That was unknown before these two runs.
+
+Each run was checked rather than assumed. That the module actually changed:
+`srcversion` `87374779AA811C291578351` → `89A7C1DAC9B51F941EFC8F2` and the version
+string `mm6108_2_0_1` → `mm8108_2_0_0`, on both boards. That the reboot happened:
+`/proc/sys/kernel/random/boot_id` changing, plus a 1 Hz ping showing the real
+outage (17 s and 23 s), not a reading of uptime. That the traffic crossed the
+radio: the AP's own per-station byte counters moved by the size of the transfers
+(2,773 → 4,616,407 rx on one, 5,242 → 4,624,540 on the other).
+
+One line worth not misreading: the A1 board logs `associating to AP … with
+corrupt beacon` on this branch. It is **not** new — counted across every boot the
+journal still holds, it appears on two boots that ran the old module (six
+occurrences on one of them) and it never blocked association, which completed
+15 ms later on the first attempt.
+
+**Not measured here:** sustained throughput. The transfers above are correctness
+checks. The published throughput figures belong to the research repository and
+were taken on `mm6108-2.0.1`.
 
 ## Evidence
 
