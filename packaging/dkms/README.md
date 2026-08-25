@@ -182,7 +182,13 @@ That is the natural next packaging step and is deliberately not started here.
 
 ## Still to do
 
-An `install`-tested run on a board that is not mid-soak, a decision on the
+A full lifecycle validation — add, build, install, cold boot, functional HaLow,
+kernel upgrade, cross-kernel rebuild, boot, HaLow again, uninstall, rollback —
+is written up as a protocol with its harness in the research repository, at
+[`tools/dkms-lifecycle/`](https://github.com/alan-sun-dev/halow-wm6108-rpi4/tree/main/tools/dkms-lifecycle).
+It is prepared and not yet run; it needs a board that is not in use.
+
+Also outstanding: an `install`-tested run on a board that is not mid-soak, a decision on the
 `-Werror`/`AUTOINSTALL` trade-off above, and optionally a `debian/` layer so the
 whole thing ships as one package alongside the overlay, BCF and modprobe
 options.
