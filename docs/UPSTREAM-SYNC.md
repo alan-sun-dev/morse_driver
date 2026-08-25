@@ -79,10 +79,19 @@ kernel starts defining the flag. Check the kernel you are building against, agai
 with a control:
 
 ```sh
-H=/lib/modules/$(uname -r)/build/include/linux/spi/spi.h
-grep -c SPI_CONTROLLER_ENABLE_CS_GPIOD $H    # 0 on every stock kernel tested here
-grep -c SPI_CS_HIGH $H                       # positive control: must be > 0
+H=$(find /usr/src -maxdepth 1 -name 'linux-headers-*' \
+      -exec test -f '{}/include/linux/spi/spi.h' \; -print | head -1)/include/linux/spi/spi.h
+grep -c SPI_CONTROLLER_ENABLE_CS_GPIOD "$H"   # 0 on every stock kernel tested here
+grep -c SPI_CS_HIGH "$H"                      # positive control: must be 3, not 0
 ```
+
+Do not shorten that to `/lib/modules/$(uname -r)/build/include/linux/spi/spi.h`.
+On Raspberry Pi OS the headers are split, and `build` points at the
+architecture-specific package while `spi.h` lives in the `-common-rpi` one. The
+short path does not exist, `grep` reports "No such file or directory" on stderr
+and prints nothing, and a count read from that is an empty string that looks like
+zero. Measured on both tested kernels with the path above: **0 occurrences of the
+flag, 3 of `SPI_CS_HIGH`**.
 
 **Change 2 — the training burst with chip select asserted.** Obsolete when
 `morse_spi_initsequence()` stops relying on an `SPI_CS_HIGH` flip:

@@ -94,9 +94,26 @@ Not tested: MM8108, SDIO, USB, mesh, CSA, and power save with the WAKE/BUSY
 handshake — the last of these is disabled on every board here rather than
 exercised.
 
-The `rpi-stock-kernel-portability` branch is **build-tested only**. Its base is a
-different upstream release from the one that ran on hardware; see the build
-status in [`docs/UPSTREAM-SYNC.md`](docs/UPSTREAM-SYNC.md).
+### Build status of this branch
+
+`rpi-stock-kernel-portability` sits on a *different* upstream release
+(`mm8108-2.0.0`) from the one that ran on hardware (`mm6108-2.0.1`), so it is
+**build-tested only**. Built on 2026-08-25 on both Raspberry Pi 4B test machines,
+from a fresh clone of this branch, against the running kernel's headers:
+
+| Kernel | this branch | pristine `upstream/main`, same machine and command |
+|---|---|---|
+| `6.6.51+rpt-rpi-v8` | builds — 0 warnings, 0 errors, `morse.ko` + `dot11ah.ko` produced | **fails** — `spi.c:1514: error: #warning "SPI_CONTROLLER_ENABLE_CS_GPIOD macro not defined" [-Werror=cpp]` |
+| `6.12.96+rpt-rpi-v8` | builds — 0 warnings, 0 errors, both modules produced | **fails** — same error, same line |
+
+The second column is the control: the first change in this fork is still needed
+at upstream `HEAD`, on both kernels, measured rather than inferred. Counted in
+the same pass, in `/usr/src/linux-headers-<version>+rpt-common-rpi/include/linux/spi/spi.h`:
+`SPI_CONTROLLER_ENABLE_CS_GPIOD` **0 occurrences** in both kernels, against 3 for
+`SPI_CS_HIGH` in the same file as a positive control.
+
+Building is not running. Nothing on this branch has been loaded against a radio;
+the hardware results in the table above belong to `portability-mm6108-2.0.1`.
 
 ## Evidence
 
