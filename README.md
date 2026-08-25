@@ -155,10 +155,15 @@ way.
 ### Soak
 
 The A1 station has passed a **short-duration soak under sustained real SPI
-activity** — SPI message and byte counters climbing continuously with `errors 0`,
-`timedout 0` and `tx failed 0` at both ends, on a single unbroken association.
-That is deliberately not called long-term stability. Longer checkpoints are being
-taken; the running record is in the research repository.
+activity**: 4 h 40 m on a single unbroken association, **1,521,061 SPI messages /
+451 MB**, with `errors 0`, `timedout 0`, `tx failed 0` at both ends and no
+failure lines in the driver log. Association uptime tracked machine uptime
+throughout, so the link never re-established.
+
+The metric here is not uptime on its own — it is that the message and byte
+counters keep climbing while the error counters stay at zero. This is
+deliberately not called long-term stability. Running record in the research
+repository.
 
 ## Why the module reports `mm8108_2_0_0`
 

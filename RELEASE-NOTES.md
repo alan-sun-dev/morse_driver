@@ -1,13 +1,12 @@
-# Release candidate notes — DRAFT
-
-**Proposed version: `mm8108-2.0.0-rpi-portability.1`**
-
-**Nothing has been tagged or published.** This file is the draft that a first
-community release candidate would be cut from. No git tag, no GitHub Release, no
-announcement anywhere. Read it as a proposal.
+# Release candidate — `mm8108-2.0.0-rpi-portability.1`
 
 The version names what it is: upstream release `mm8108-2.0.0`, plus this fork's
 portability delta, revision 1.
+
+**Status: prepared, not yet tagged.** No git tag and no GitHub Release exist for
+this yet. This is a release *candidate* — the code is frozen and is the reference
+implementation, but it has not been announced anywhere and no permutation beyond
+the matrix below has been tested.
 
 ---
 
@@ -72,9 +71,10 @@ board.
 - **`-Werror` is retained deliberately**, and with DKMS `AUTOINSTALL="yes"` that
   means a build which fails on some future kernel leaves no driver at the next
   boot. The mitigation is the pre-reboot gate, not weakening the flag.
-- **Stability is short-duration only.** The A1 soak has passed under sustained
-  real SPI activity with error counters at zero, but that is not a long-term
-  stability claim.
+- **Stability is short-duration only.** The A1 soak stands at 4 h 40 m — 1.52 M
+  SPI messages, 451 MB, error counters at zero, one unbroken association — which
+  is a short-duration soak under sustained real SPI activity and **not** a
+  long-term stability claim. Nothing here has run for days.
 - **Hardware-specific pieces are not shipped here** — device tree overlay, BCF,
   firmware and `modprobe` options are per board and live in the research
   repository.
