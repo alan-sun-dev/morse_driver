@@ -112,8 +112,39 @@ the same pass, in `/usr/src/linux-headers-<version>+rpt-common-rpi/include/linux
 `SPI_CONTROLLER_ENABLE_CS_GPIOD` **0 occurrences** in both kernels, against 3 for
 `SPI_CS_HIGH` in the same file as a positive control.
 
-Building is not running. Nothing on this branch has been loaded against a radio;
-the hardware results in the table above belong to `portability-mm6108-2.0.1`.
+### This branch on hardware
+
+Loaded once, 2026-08-25, on the **MM6108A2 / Heltec HT-HC01P** running
+`6.12.96+rpt-rpi-v8`: both modules installed to `updates/`, `depmod`, and a cold
+reboot, so the autoload path was exercised rather than `insmod`.
+
+| | |
+|---|---|
+| module autoloaded | t = 4.96 s, reporting `0-rel_mm8108_2_0_0_2026_Apr_21` |
+| firmware | `mm6108.bin`, crc32 `0xbe7b5c8f` |
+| BCF | the board's own file, crc32 `0x389a48c4`, t = 5.12 s |
+| authenticated / associated | t = 7.35 s / 7.41 s, **first attempt** (`try 1/3`) |
+| security | AP logged `auth_alg=sae`; AP reports `MFP: yes` for this station |
+| address | DHCP, the same lease as before the swap |
+| link | MCS7 at 4 MHz, `tx failed 0`, 41 tx retries over the whole session |
+| ICMP | 60/60, 0% loss, avg 5.7 ms |
+| data | 4 MiB each way, SHA-256 matching and full size both directions |
+| SPI | `errors 0`, `timedout 0` across 63,526 messages / 30.6 MB |
+| driver log | zero CMD63, `-EPROTO`, CRC, read/write or probe failure lines |
+
+The AP's own byte counters for this station went from 2,773 rx / 1,520 tx to
+4,616,407 / 4,539,146 across the transfer, which is what establishes that the
+traffic crossed the radio rather than some other path.
+
+That the module actually changed was checked rather than assumed: `srcversion`
+went from `87374779AA811C291578351` to `89A7C1DAC9B51F941EFC8F2` and the version
+string from `mm6108_2_0_1` to `mm8108_2_0_0`. The reboot was confirmed by
+`/proc/sys/kernel/random/boot_id` changing, not by reading uptime.
+
+**Still untested on this branch:** the MM6108A1 / Wio-WM6108, and kernel 6.6.51.
+Both are covered for `portability-mm6108-2.0.1` and neither has been re-run on
+this base. Sustained throughput was not benchmarked here either — the transfers
+above were correctness checks, not measurements.
 
 ## Evidence
 
