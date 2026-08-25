@@ -1,14 +1,61 @@
-# DKMS packaging — assessment and proposal
+# DKMS packaging
 
-**Nothing here is wired up.** This directory documents what DKMS packaging of
-this driver would require and ships a proposed `dkms.conf.proposed`. It has not
-been built, installed or tested, and no file here is picked up by DKMS as things
-stand — `dkms add` looks for `dkms.conf` at the root of the source tree it is
-given, not in a subdirectory.
+A minimal packaging layer. **Upstream's Makefile is not modified** — it already
+builds out-of-tree with `-C $(KERNEL_SRC) M=$(SRC)` and takes every option from
+the command line, which is all DKMS needs.
 
-The reason for stopping here is that DKMS's value is in surviving kernel
-upgrades unattended, and this driver has a property that makes that risky; see
-"The `-Werror` problem" below.
+```
+packaging/dkms/
+  dkms.conf.in        template; @VERSION@ is substituted at staging time
+  prepare-source.sh   populates the submodule, stages /usr/src/morse-<version>,
+                      writes dkms.conf
+  README.md           this file
+```
+
+```sh
+sudo packaging/dkms/prepare-source.sh
+sudo dkms add    morse/<version>
+sudo dkms build  morse/<version>
+sudo dkms install morse/<version>      # see "install" below before running this
+```
+
+`dkms` lives in `/usr/sbin`, which is not on a non-root `PATH` on Debian — call
+it through `sudo`, or `command not found` will look like a missing package.
+
+## Status: build-tested, not install-tested
+
+Run on the MM6108A2 board, kernel `6.12.96+rpt-rpi-v8`, 2026-08-25:
+
+| | |
+|---|---|
+| `dkms add` | ok |
+| `dkms build` | ok — `morse/mm8108-2.0.0+rpi-portability, 6.12.96+rpt-rpi-v8, aarch64: built` |
+| artefacts | `morse.ko.xz`, `dot11ah.ko.xz` under `.../aarch64/module/` |
+| same code as a manual build? | yes — `srcversion 89A7C1DAC9B51F941EFC8F2`, identical |
+| `dkms install` | **deliberately not run** |
+
+`dkms install` was skipped because both test boards are mid-soak on modules
+placed in `updates/` by hand, and installing would replace them. Nothing in this
+run touched `/lib/modules`; that was checked afterwards, along with the link
+still being up and SPI `errors 0`.
+
+**Two differences from a manual build, both worth knowing before trusting the
+package:**
+
+- **DKMS strips the modules.** `readelf -S` finds **0** debug sections in the
+  DKMS artefact against **15** in the manual build of the same commit;
+  uncompressed that is 829 KB against 26.6 MB. The driver's `DEBUG=y` default
+  compiles with `-g`, and DKMS then strips it back out. Fine for running,
+  unhelpful the day something needs a symbolised oops.
+- **DKMS signs them**, generating `/var/lib/dkms/mok.key` on first use. Harmless
+  on a Raspberry Pi, but it is a new key appearing on the machine.
+
+The artefacts are `.ko.xz`, not `.ko` — a `find -name '*.ko'` finds nothing and
+looks like a failed build.
+
+The submodule path that `prepare-source.sh` exists for was exercised from a
+genuinely fresh clone: `mmrc.h` absent after `git clone`, the script cloned
+`mmrc-submodule` at the pinned `24f6c69`, and the staged tree had the header.
 
 ## Verdict
 
@@ -34,7 +81,7 @@ Two modules, from one source tree:
 
 ## Required build variables
 
-The combination validated on hardware, and the one the proposed `dkms.conf`
+The combination validated on hardware, and the one `dkms.conf.in`
 carries:
 
 ```
@@ -117,7 +164,7 @@ Options, none of them free:
    built everywhere else, including how it was validated, so warnings would go
    unnoticed in exactly the builds nobody watches.
 
-The proposal below takes option 1 and says so in a comment. This should be an
+The `dkms.conf.in` here takes option 1 and says so in a comment. This should be an
 explicit decision, not a default.
 
 ## What DKMS does not cover
@@ -133,15 +180,9 @@ Three things this driver needs that are not modules and are out of DKMS's scope:
 A useful Raspberry Pi installer would carry those alongside the DKMS package.
 That is the natural next packaging step and is deliberately not started here.
 
-## Proposed layout
+## Still to do
 
-```
-packaging/dkms/
-  README.md              this assessment
-  dkms.conf.proposed     draft, untested; would be installed as
-                         /usr/src/morse-<version>/dkms.conf
-```
-
-Left for later, once the above decisions are made: a `prepare-source.sh` that
-populates the submodule and stages `/usr/src/morse-<version>`, and optionally a
-`debian/` layer.
+An `install`-tested run on a board that is not mid-soak, a decision on the
+`-Werror`/`AUTOINSTALL` trade-off above, and optionally a `debian/` layer so the
+whole thing ships as one package alongside the overlay, BCF and modprobe
+options.

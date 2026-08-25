@@ -161,6 +161,65 @@ occurrences on one of them) and it never blocked association, which completed
 checks. The published throughput figures belong to the research repository and
 were taken on `mm6108-2.0.1`.
 
+## Why the module reports `mm8108_2_0_0`
+
+On this branch `modinfo morse` and `/sys/module/morse/version` both say
+`0-rel_mm8108_2_0_0_2026_Apr_21`, on hardware that is an MM6108. That is correct
+and it is not a chip selection. Traced end to end:
+
+```
+Makefile:11          override MORSE_VERSION = "0-rel_mm8108_2_0_0_2026_Apr_21"
+Makefile:21          ccflags-y += "-DMORSE_VERSION=$(MORSE_VERSION)"
+morse.h:65           #define DRV_VERSION __stringify(MORSE_VERSION)
+init.c:103           MODULE_VERSION(DRV_VERSION)      -> modinfo, /sys/module/morse/version
+init.c:45            pr_info("morse micro driver registration. Version %s\n", DRV_VERSION)
+command.c:1106       MORSE_INFO(... "Morse Driver Version: %s, Morse FW Version: %s", DRV_VERSION, resp->version)
+```
+
+`dot11ah` has its own copy of the same literal in `dot11ah/Makefile:11`, reaching
+`DOT11AH_VERSION` in `dot11ah/dot11ah.h:98`.
+
+Those are **all** the uses — a `MODULE_VERSION`, two log lines, and nothing else.
+Nothing branches on it. In particular the parsing right below `command.c:1106`
+operates on `resp->version`, the string the *firmware* returns, so
+`mors->sw_ver` never comes from this macro.
+
+It is a per-release literal that Morse Micro edit at each drop:
+
+| tag | literal |
+|---|---|
+| `1.17.9` | `0-rel_1_17_9_2026_Apr_20` |
+| `mm6108-2.0.1` | `0-rel_mm6108_2_0_1_2026_Jun_11` |
+| `mm8108-2.0.0` | `0-rel_mm8108_2_0_0_2026_Apr_21` |
+
+So it names **the upstream release this tree came from**, and upstream `main`
+currently points at `mm8108-2.0.0`. The `portability-mm6108-2.0.1` branch reports
+`mm6108_2_0_1` for exactly the same reason. Changing the string would make the
+module misreport its own provenance, so this fork leaves it alone.
+
+The `override` keyword means a command line cannot change it either:
+
+```
+$ make -n MORSE_VERSION='"SET-FROM-COMMAND-LINE"' KERNEL_SRC=... all | head -1
+make MORSE_VERSION="0-rel_mm8108_2_0_0_2026_Apr_21" -C ... M=...
+```
+
+**The chip is identified at run time, not by this label.** `mm6108.o` and
+`mm8108.o` are both linked in unconditionally (`Makefile:138-139`); `hw.c:431`
+reads `MORSE_REG_CHIP_ID` over the bus and walks `chip_series[]` calling
+`chip_id_matches()`. Measured on the two boards running this branch, both of them
+labelled `mm8108_2_0_0`:
+
+| | HT-HC01P | Wio-WM6108 |
+|---|---|---|
+| firmware the driver loaded | `morse/mm6108.bin` | `morse/mm6108.bin` |
+| `HW version` from debugfs `vendor_info` | `0x00000406` — MM6108**A2** | `0x00000306` — MM6108**A1** |
+| `SW version` (from the firmware, not the driver) | 2.0.1 | 2.0.1 |
+
+Three different version-shaped things are in play and only the first is this
+macro: the **driver build label** (`mm8108_2_0_0`), the **firmware version** the
+chip reports (2.0.1), and the **chip ID** read off the bus (`0x406` / `0x306`).
+
 ## Evidence
 
 The measurements, logs, failure traces and the reasoning behind each change live
@@ -227,5 +286,6 @@ See [`docs/UPSTREAM-SYNC.md`](docs/UPSTREAM-SYNC.md) for the rebase workflow and
 for how to check whether a new Morse release has already fixed any of this — the
 point at which the corresponding commit should be dropped.
 
-DKMS packaging is assessed but not implemented; see
+DKMS packaging exists as a minimal layer that leaves upstream's Makefile alone;
+it is build-tested but not install-tested. See
 [`packaging/dkms/README.md`](packaging/dkms/README.md).
