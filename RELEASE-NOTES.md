@@ -3,10 +3,11 @@
 The version names what it is: upstream release `mm8108-2.0.0`, plus this fork's
 portability delta, revision 1.
 
-**Status: prepared, not yet tagged.** No git tag and no GitHub Release exist for
-this yet. This is a release *candidate* — the code is frozen and is the reference
-implementation, but it has not been announced anywhere and no permutation beyond
-the matrix below has been tested.
+**Status: pre-release.** Published as a GitHub pre-release, deliberately: the
+code is frozen and is the reference implementation, but the soak is measured in
+hours rather than days, the A1 board has never run 6.12.96, and the DKMS
+lifecycle was exercised on the A2 board only. Nothing outside the matrix below
+has been tested, and this has not been announced anywhere.
 
 ---
 
