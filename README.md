@@ -70,96 +70,95 @@ floored at 250 and all three are independently necessary. The same floor already
 exists in Morse's OpenWrt feed (`003_fix_spi_inter_transaction_delay.patch`) but
 not in the released driver.
 
-## Tested
+## Validation matrix
 
-Measured on hardware with the `portability-mm6108-2.0.1` tree — driver release
-`mm6108-2.0.1` plus these three commits — loaded with no module parameters beyond
-`country=`, `bcf=` and, on the HT-HC01P, `macaddr_suffix=`.
+Hardware validated means: built on that kernel, loaded, firmware and the board's
+own BCF loaded, WPA3-SAE with PMF association, DHCP, bidirectional traffic, and
+the SPI core's own counters reporting `errors 0` / `timedout 0`.
 
-| Kernel (Raspberry Pi OS bookworm) | MM6108**A1** — Wio-WM6108 on a SenseCAP M1 SPI carrier | MM6108**A2** — Heltec HT-HC01P Pi HAT |
+**Wio-WM6108 / MM6108A1** — SenseCAP M1 SPI carrier
+
+| kernel | status |
+|---|---|
+| Raspberry Pi OS `6.6.51+rpt-rpi-v8` | **hardware validated** |
+| Raspberry Pi OS `6.12.96+rpt-rpi-v8` | not tested |
+
+**Heltec HT-HC01P / MM6108A2** — Heltec Raspberry Pi HAT
+
+| kernel | status |
+|---|---|
+| Raspberry Pi OS `6.6.51+rpt-rpi-v8` | **hardware validated** |
+| Raspberry Pi OS `6.12.96+rpt-rpi-v8` | **hardware validated** |
+
+**DKMS** — full lifecycle, MM6108A2 board, 2026-08-25
+
+| stage | status |
+|---|---|
+| clean install on `6.6.51` | **validated** |
+| cold-boot autoload | **validated** |
+| automatic rebuild during kernel upgrade to `6.12.96` | **validated** |
+| boot and HaLow operation after the upgrade | **validated** |
+| uninstall | **validated** |
+| clean rollback, no module present afterwards | **validated** |
+
+**This is not a claim about every permutation.** Four cells of the hardware
+matrix exist and three are filled; the DKMS lifecycle was exercised on the A2
+board only. Anything not listed above has not been tested — including MM8108,
+SDIO, USB, mesh, CSA, and power save with the WAKE/BUSY handshake, which is
+disabled on every board here rather than exercised.
+
+The Wio-WM6108 was validated at both 10 MHz and 50 MHz SPI; the HT-HC01P at the
+50 MHz its vendor device tree specifies, with the AP rating the link MCS7 at
+4 MHz. Unpatched `mm6108-2.0.1` **fails to build** on both kernels with the
+identical `spi.c` `-Werror=cpp` error, and so does upstream `main`.
+
+### The evidence behind the matrix
+
+**Build, with its control.** Built from a fresh clone on both Raspberry Pi 4B
+test machines against the running kernel's headers, and pristine `upstream/main`
+built on the same machine with the same command as the control:
+
+| kernel | this branch | pristine `upstream/main`, same machine and command |
 |---|---|---|
-| `6.6.51+rpt-rpi-v8` | associated, traffic, `errors 0` | associated, traffic, `errors 0` |
-| `6.12.96+rpt-rpi-v8` | not tested | associated, traffic, `errors 0` |
+| `6.6.51+rpt-rpi-v8` | 0 warnings, 0 errors, both modules produced | **fails** — `spi.c:1514: error: #warning "SPI_CONTROLLER_ENABLE_CS_GPIOD macro not defined" [-Werror=cpp]` |
+| `6.12.96+rpt-rpi-v8` | 0 warnings, 0 errors, both modules produced | **fails** — same error, same line |
 
-What "associated, traffic" covers on each: firmware and the board's own BCF load,
-WPA3-SAE with PMF, DHCP over the air, bidirectional traffic, and the SPI core's
-own counters reporting `errors 0` / `timedout 0`. The Wio-WM6108 was validated at
-both 10 MHz and 50 MHz SPI; the HT-HC01P at the 50 MHz its vendor device tree
-specifies, with the AP rating the link MCS7 at 4 MHz.
-
-Unpatched `mm6108-2.0.1` **fails to build** on both kernels, with the identical
-`spi.c` `-Werror=cpp` error.
-
-Not tested: MM8108, SDIO, USB, mesh, CSA, and power save with the WAKE/BUSY
-handshake — the last of these is disabled on every board here rather than
-exercised.
-
-### Build status of this branch
-
-`rpi-stock-kernel-portability` sits on a *different* upstream release
-(`mm8108-2.0.0`) from the one that ran on hardware (`mm6108-2.0.1`), so it is
-**build-tested only**. Built on 2026-08-25 on both Raspberry Pi 4B test machines,
-from a fresh clone of this branch, against the running kernel's headers:
-
-| Kernel | this branch | pristine `upstream/main`, same machine and command |
-|---|---|---|
-| `6.6.51+rpt-rpi-v8` | builds — 0 warnings, 0 errors, `morse.ko` + `dot11ah.ko` produced | **fails** — `spi.c:1514: error: #warning "SPI_CONTROLLER_ENABLE_CS_GPIOD macro not defined" [-Werror=cpp]` |
-| `6.12.96+rpt-rpi-v8` | builds — 0 warnings, 0 errors, both modules produced | **fails** — same error, same line |
-
-The second column is the control: the first change in this fork is still needed
-at upstream `HEAD`, on both kernels, measured rather than inferred. Counted in
-the same pass, in `/usr/src/linux-headers-<version>+rpt-common-rpi/include/linux/spi/spi.h`:
+Counted in the same pass, in
+`/usr/src/linux-headers-<version>+rpt-common-rpi/include/linux/spi/spi.h`:
 `SPI_CONTROLLER_ENABLE_CS_GPIOD` **0 occurrences** in both kernels, against 3 for
 `SPI_CS_HIGH` in the same file as a positive control.
 
-### This branch on hardware
+**On hardware.** Both boards were installed to `updates/` and **cold rebooted**,
+so what was exercised is the unattended autoload path, not an `insmod`:
 
-Loaded on **both** boards, 2026-08-25. In each case the modules were installed to
-`updates/` and the machine **cold rebooted**, so what was tested is the unattended
-autoload path rather than an `insmod`.
-
-| | MM6108**A2** — HT-HC01P, `6.12.96` | MM6108**A1** — Wio-WM6108, `6.6.51` |
+| | MM6108A2 — HT-HC01P, `6.12.96` | MM6108A1 — Wio-WM6108, `6.6.51` |
 |---|---|---|
 | module autoloaded | t = 4.96 s | t = 9.96 s |
-| firmware / BCF loaded | crc32 `0xbe7b5c8f` / `0x389a48c4` | crc32 `0xbe7b5c8f` / `0x941b2a82` |
 | authenticated → associated | 7.35 s → 7.41 s, **try 1/3** | 12.08 s → 12.10 s, **try 1/3** |
 | security, from the AP | `auth_alg=sae`, `MFP: yes` | `auth_alg=sae`, `MFP: yes` |
-| address | DHCP, same lease as before the swap | DHCP, same lease as before the swap |
-| link | MCS7 / 4 MHz, `tx failed 0`, 41 retries | MCS7 / 4 MHz, `tx failed 0`, 34 retries |
-| ICMP | 60/60, 0% loss, avg 5.7 ms | 60/60, 0% loss, avg 4.6 ms |
-| data | 4 MiB each way, SHA-256 matching, full size | 4 MiB each way, SHA-256 matching, full size |
-| SPI | `errors 0`, `timedout 0`, 63,526 msgs / 30.6 MB | `errors 0`, `timedout 0`, 56,526 msgs / 28.6 MB |
-| driver log | 0 CMD63 / `-EPROTO` / CRC / read / write / probe failures | same, 0 |
+| link | MCS7 / 4 MHz, `tx failed 0` | MCS7 / 4 MHz, `tx failed 0` |
+| data | 4 MiB each way, SHA-256 matching | 4 MiB each way, SHA-256 matching |
+| SPI | `errors 0`, `timedout 0` | `errors 0`, `timedout 0` |
 
-So this branch's coverage is:
+That the running module was the one under test was checked rather than assumed
+(`srcversion`, and the version string), the reboots were confirmed from
+`/proc/sys/kernel/random/boot_id` rather than from uptime, and that the traffic
+crossed the radio was established from the AP's own per-station byte counters
+moving by the size of the transfers.
 
-| Kernel | MM6108A1 / Wio-WM6108 | MM6108A2 / HT-HC01P |
-|---|---|---|
-| `6.6.51+rpt-rpi-v8` | **on hardware** | builds; hardware only on `portability-mm6108-2.0.1` |
-| `6.12.96+rpt-rpi-v8` | not tested — that board is deliberately kept on 6.6.51 | **on hardware** |
+**One line that looks like a regression and is not:** the A1 board logs
+`associating to AP … with corrupt beacon`. Counted across every boot still in its
+journal it also appears on two boots that ran the previous driver, six times on
+one of them, and association completed 15 ms later on the first attempt either
+way.
 
-**What this establishes beyond the fixes themselves:** `mm8108-2.0.0` changed
-twelve other files relative to `mm6108-2.0.1` (`mac.c`, `wiphy.c`, `skbq.c`,
-`pageset.c`, `yaps.c` and others). None of them breaks MM6108 on either silicon
-revision or either kernel. That was unknown before these two runs.
+### Soak
 
-Each run was checked rather than assumed. That the module actually changed:
-`srcversion` `87374779AA811C291578351` → `89A7C1DAC9B51F941EFC8F2` and the version
-string `mm6108_2_0_1` → `mm8108_2_0_0`, on both boards. That the reboot happened:
-`/proc/sys/kernel/random/boot_id` changing, plus a 1 Hz ping showing the real
-outage (17 s and 23 s), not a reading of uptime. That the traffic crossed the
-radio: the AP's own per-station byte counters moved by the size of the transfers
-(2,773 → 4,616,407 rx on one, 5,242 → 4,624,540 on the other).
-
-One line worth not misreading: the A1 board logs `associating to AP … with
-corrupt beacon` on this branch. It is **not** new — counted across every boot the
-journal still holds, it appears on two boots that ran the old module (six
-occurrences on one of them) and it never blocked association, which completed
-15 ms later on the first attempt.
-
-**Not measured here:** sustained throughput. The transfers above are correctness
-checks. The published throughput figures belong to the research repository and
-were taken on `mm6108-2.0.1`.
+The A1 station has passed a **short-duration soak under sustained real SPI
+activity** — SPI message and byte counters climbing continuously with `errors 0`,
+`timedout 0` and `tx failed 0` at both ends, on a single unbroken association.
+That is deliberately not called long-term stability. Longer checkpoints are being
+taken; the running record is in the research repository.
 
 ## Why the module reports `mm8108_2_0_0`
 

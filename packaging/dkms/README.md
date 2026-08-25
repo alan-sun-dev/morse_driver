@@ -58,6 +58,27 @@ The submodule path that `prepare-source.sh` exists for was exercised from a
 genuinely fresh clone: `mmrc.h` absent after `git clone`, the script cloned
 `mmrc-submodule` at the pinned `24f6c69`, and the staged tree had the header.
 
+## DKMS v1 — frozen behaviour
+
+The lifecycle run of 2026-08-25 is the first validated DKMS implementation, and
+these four things are now fixed. Change them only with a reason and a re-run.
+
+| | |
+|---|---|
+| `AUTOINSTALL` | `"yes"` — intended, and validated across a real kernel upgrade |
+| `-Werror` | unchanged from upstream. Not to be weakened to get a future build to pass |
+| install path | `/lib/modules/<kernel>/updates/dkms/` |
+| module set | `morse` **and** `dot11ah`, both installed, `depmod` run |
+
+**On the install path:** `dkms.conf` sets `DEST_MODULE_LOCATION="/updates"` and
+Debian's dkms ignores it, normalising everything to `updates/dkms/`. That is
+**observed behaviour on dkms 3.0.10, not an error** — the path lands in
+`modules.dep`, `depmod` runs, and the modules load and autoload correctly. Do not
+try to force the other path. The only practical consequence is for anyone who
+also has hand-installed modules in `updates/` directly: two candidates for the
+same module then exist, and which one loads is not something to leave to chance.
+A machine should use one mechanism or the other.
+
 ## Verdict
 
 DKMS can be added **as a small packaging layer, without restructuring upstream's

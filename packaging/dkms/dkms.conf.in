@@ -19,6 +19,12 @@ CLEAN="make -C ${dkms_tree}/${PACKAGE_NAME}/${PACKAGE_VERSION}/build \
     KERNEL_SRC=${kernel_source_dir} clean"
 
 # morse uses symbols exported by dot11ah, so both must be installed.
+#
+# DEST_MODULE_LOCATION is required syntax and is then IGNORED by Debian's dkms,
+# which normalises every module to /lib/modules/<kernel>/updates/dkms/. That is
+# observed behaviour on dkms 3.0.10, not an error and not something to fight:
+# the path is in modules.dep, depmod is run, and the modules load. Leave these
+# lines as they are.
 BUILT_MODULE_NAME[0]="morse"
 BUILT_MODULE_LOCATION[0]=""
 DEST_MODULE_LOCATION[0]="/updates"
